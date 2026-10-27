@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Parking Dashboard</title>
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--text:#f1f5f9;--muted:#94a3b8;--green:#16a34a;--red:#dc2626;--blue:#38bdf8}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;border-bottom:1px solid #334155}
+h1{font-size:20px;margin:0}
+.pill{font-size:13px;padding:4px 12px;border-radius:99px;background:#334155;color:var(--muted)}
+.pill.live{background:#14532d;color:#86efac}.pill.err{background:#7f1d1d;color:#fecaca}
+main{display:grid;grid-template-columns:2fr 1fr;gap:20px;padding:20px 24px}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:12px;padding:16px}
+.card h2{font-size:14px;margin:0 0 12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+#video{width:100%;border-radius:8px;display:block;background:#000;min-height:200px}
+.counts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.count{background:#0f172a;border-radius:10px;padding:14px;text-align:center}
+.count .label{color:var(--muted);font-size:13px}
+.count .num{font-size:34px;font-weight:700;margin:4px 0}
+.count .num.zero{color:var(--red)}.count .num.ok{color:var(--green)}
+.count .sub{font-size:12px;color:var(--muted)}
+.grid{display:flex;flex-wrap:wrap;gap:8px}
+.slot{width:62px;padding:8px 0;border-radius:8px;text-align:center;font-size:12px;font-weight:600;color:#fff}
+.slot.free{background:var(--green)}.slot.occ{background:var(--red)}
+.group{margin-bottom:14px}.group .t{font-size:13px;color:var(--muted);margin-bottom:6px}
+.legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-top:12px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
+#msg{color:#fecaca;font-size:13px;margin-top:8px}
+.side{display:flex;flex-direction:column;gap:20px}
+</style></head><body>
+<header><h1>Smart Parking Dashboard</h1><span id="pill" class="pill">connecting…</span></header>
+<main>
+ <div class="card"><h2>Annotated video</h2><img id="video" alt="live frame">
+  <div class="legend"><span><i class="dot" style="background:#16a34a"></i>Free slot</span>
+  <span><i class="dot" style="background:#dc2626"></i>Occupied slot</span>
+  <span><i class="dot" style="background:#facc15"></i>Detected vehicle</span></div></div>
+ <div class="side">
+  <div class="card"><h2>Availability</h2><div class="counts">
+   <div class="count"><div class="label">2W free</div><div class="num" id="f2">–</div><div class="sub" id="t2"></div></div>
+   <div class="count"><div class="label">4W free</div><div class="num" id="f4">–</div><div class="sub" id="t4"></div></div>
+  </div><div id="msg"></div></div>
+  <div class="card"><h2>Slot grid</h2>
+   <div class="group"><div class="t">4-wheeler slots</div><div class="grid" id="g4"></div></div>
+   <div class="group"><div class="t">2-wheeler slots</div><div class="grid" id="g2"></div></div>
+   <div class="sub" id="meta" style="font-size:12px;color:var(--muted)"></div></div>
+ </div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+function setCount(t,c){const f=$("f"+t),s=$("t"+t);
+ if(!c||c.total===0){f.textContent="–";f.className="num";s.textContent="no slots marked";return;}
+ f.textContent=c.free;f.className="num "+(c.free===0?"zero":"ok");s.textContent=c.free+" / "+c.total+" free";}
+function grid(el,slots,t){el.innerHTML="";
+ slots.filter(s=>s.type===t).forEach(s=>{const d=document.createElement("div");
+  d.className="slot "+(s.occupied?"occ":"free");d.textContent=t+"-"+s.id;el.appendChild(d);});}
+async function poll(){
+ try{const r=await (await fetch("/results")).json();
+  const pill=$("pill");
+  if(r.status==="ok"){pill.textContent="● live";pill.className="pill live";
+   setCount("2",r.counts["2W"]);setCount("4",r.counts["4W"]);
+   grid($("g4"),r.slots,"4W");grid($("g2"),r.slots,"2W");
+   $("msg").textContent=r.slots_marked?"":"No slots marked yet - run mark_slots.py";
+   $("meta").textContent="Vehicles seen: 2W "+r.vehicles["2W"]+", 4W "+r.vehicles["4W"]+" · "+r.inference_ms+" ms/frame · "+r.source;}
+  else if(r.status==="error"){pill.textContent="error";pill.className="pill err";$("msg").textContent=r.message;}
+  else{pill.textContent="starting model…";pill.className="pill";}
+ }catch(e){$("pill").textContent="backend offline";$("pill").className="pill err";}
+ setTimeout(poll,1000);}
+function frame(){const img=$("video");
+ img.onload=()=>setTimeout(frame,150);img.onerror=()=>setTimeout(frame,1000);
+ img.src="/frame?t="+Date.now();}
+poll();frame();
+</script></body></html>
